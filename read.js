@@ -40,7 +40,7 @@ function makeClient(config){
 function setUser(next){
   if(next?.id===user?.id)return;
   user=next; loadId++;
-  $('connect-open').hidden=!!user; $('sign-out').hidden=!user; $('add-open').hidden=!user; $('book-fields').disabled=!user;
+  $('connect-open').hidden=!!user; $('sign-out').hidden=!user; $('add-open').hidden=!user; $('csv-books').hidden=!user; $('book-fields').disabled=!user;
   $('connection-status').textContent=user?'Connected':'Your record'; $('connection-status').classList.toggle('connected',!!user);
   if(!user){ books=[]; render(); $('library-list').innerHTML='<p class="row-empty">Sign in to see your books.</p>'; $('book-dialog').close(); }
   else load();
@@ -115,6 +115,16 @@ function renderLibrary(){
 $('search').addEventListener('input',()=>{ query=$('search').value; renderLibrary(); });
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ filter=b.dataset.filter; document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); renderLibrary(); });
 
+
+// Download, or on a phone share, a CSV of your own rows.
+async function exportCsv(name,header,rows){
+  const q=v=>{ const s=String(v??''); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const csv=[header,...rows].map(r=>r.map(q).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  try{ const file=new File([blob],name,{type:'text/csv'}); if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:name}); return; } }catch(err){ if(err?.name==='AbortError') return; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+}
+$('csv-books').onclick=()=>exportCsv('read-books.csv',['title','author','status','rating','finished_on','takeaway_1','takeaway_2','takeaway_3'],books.map(b=>[b.title,b.author,b.status,b.rating??'',b.finished_on||'',b.takeaways[0]||'',b.takeaways[1]||'',b.takeaways[2]||'']));
 // ---- add / edit ----
 $('b-stars').innerHTML=Array.from({length:10},(_,i)=>`<button type="button" class="star" data-star="${i+1}" role="radio" aria-checked="false" aria-label="${i+1} out of 10">★</button>`).join('');
 function paintStars(n,hover){ const lit=hover!=null?hover:n; $('b-stars').querySelectorAll('.star').forEach(b=>{ const v=+b.dataset.star; b.classList.toggle('on',v<=lit); b.setAttribute('aria-checked',String(v===n)); }); $('b-rating-word').innerHTML=n?`<b>${n}/10</b> · ${WORDS[n]}`:'Tap a star.'; }
