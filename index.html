@@ -126,12 +126,13 @@ textarea{width:100%;min-height:180px;resize:vertical;border-radius:8px;backgroun
 .stars-pick{display:flex;gap:3px;flex-wrap:wrap}.stars-pick .star{font-size:26px;padding:3px 1px}
 .note-field{display:grid;gap:10px}.note-field input{padding:11px 12px}
 @media(max-width:520px){.book{grid-template-columns:36px 1fr;gap:12px}.cover{width:36px;height:50px;font-size:13px}.book .ops{grid-column:2;justify-content:flex-start;margin-top:4px}.stars-pick .star{font-size:22px;padding:2px 1px}}
+.brand-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.home{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;color:var(--muted);text-decoration:none;flex:none}.home:hover{color:var(--mint);border-color:var(--mint)}.home svg{width:16px;height:16px}@media(max-width:760px){.brand-row{gap:12px}.home{width:32px;height:32px}}
 </style>
 </head>
 <body>
 <noscript>This page needs JavaScript to connect to your database.</noscript>
 <div class="workspace">
-<aside class="sidebar" aria-label="Your books"><div class="brand" aria-label="READ">READ<span>.</span></div><p class="nav-label">YOUR BOOKS</p><nav aria-label="Summary">
+<aside class="sidebar" aria-label="Your books"><div class="brand-row"><div class="brand" aria-label="READ">READ<span>.</span></div><a class="home" id="home-link" href="#" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 10v9.5h13V10" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 19.5v-5h4v5" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a></div><p class="nav-label">YOUR BOOKS</p><nav aria-label="Summary">
 <a class="area-link" href="#read" aria-current="page"><span class="area-name"><svg viewBox="0 0 20 26" fill="none" aria-hidden="true"><path d="M3 6c3-1.5 5-1.5 7 0 2-1.5 4-1.5 7 0v14c-3-1.5-5-1.5-7 0-2-1.5-4-1.5-7 0z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 6v14" stroke="currentColor" stroke-width="1.5"/></svg>This year</span><strong id="side-year">—</strong></a>
 <a class="area-link" href="#library"><span class="area-name"><svg viewBox="0 0 20 26" fill="none" aria-hidden="true"><path d="M10 3l2.2 4.6 5 .7-3.6 3.5.9 5L10 14.4l-4.5 2.4.9-5L2.8 8.3l5-.7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Reading now</span><strong id="side-reading">—</strong></a>
 </nav></aside>
