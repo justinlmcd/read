@@ -1,0 +1,12 @@
+{
+  "name": "read",
+  "private": true,
+  "version": "0.1.0",
+  "description": "READ. A book log: title, author, a rating out of ten, and the three things worth keeping.",
+  "scripts": {
+    "dev": "node dev.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0"
+  }
+}
