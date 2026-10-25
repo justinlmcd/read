@@ -14,7 +14,7 @@ const r1=n=>{ const v=Math.round(n*10)/10; return Number.isInteger(v)?String(v):
 const initials=t=>t.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 
 let client=null,user=null,busy=false,authSub=null,connecting=null,storageCleanup=null;
-let books=[],filter='all',query='',rating=0,loadId=0;
+let books=[],logs=[],pagesReady=false,filter='all',query='',rating=0,loadId=0;
 
 function message(id,text,kind=''){ $(id).textContent=text; $(id).className='message'+(kind?' '+kind:''); }
 
@@ -42,9 +42,9 @@ function makeClient(config){
 function setUser(next){
   if(next?.id===user?.id)return;
   user=next; loadId++;
-  $('connect-open').hidden=!!user; $('sign-out').hidden=!user; $('add-open').hidden=!user; $('csv-books').hidden=!user; $('book-fields').disabled=!user;
+  $('connect-open').hidden=!!user; $('sign-out').hidden=!user; $('add-open').hidden=!user; $('csv-books').hidden=!user; $('book-fields').disabled=!user; $('log-fields').disabled=!user;
   $('connection-status').textContent=user?'Connected':'Your record'; $('connection-status').classList.toggle('connected',!!user);
-  if(!user){ books=[]; render(); $('library-list').innerHTML='<p class="row-empty">Sign in to see your books.</p>'; $('book-dialog').close(); }
+  if(!user){ books=[]; logs=[]; render(); $('library-list').innerHTML='<p class="row-empty">Sign in to see your books.</p>'; $('book-dialog').close(); $('log-dialog').close(); }
   else load();
   window.coachUser?.(user?.id);
 }
@@ -65,14 +65,26 @@ async function load(){
   try{
     const db=await connect();
     const rows=await readAll(()=>db.from('books').select('*',{count:'exact'}).order('updated_at',{ascending:false}));
+    // Pages are optional (pages.sql): without that table the library still works, minus progress.
+    let lg=[],ready=true;
+    try{ lg=await readAll(()=>db.from('reading_log').select('id,book_id,read_on,pages,created_at',{count:'exact'}).order('read_on',{ascending:false}).order('created_at',{ascending:false})); }
+    catch(err){ if(/relation .* does not exist|schema cache/i.test(err.message||'')) ready=false; else throw err; }
     if(id!==loadId)return;
-    books=rows.map(b=>({...b,rating:b.rating==null?null:Number(b.rating),takeaways:(b.takeaways||[]).filter(Boolean)}));
+    books=rows.map(b=>({...b,rating:b.rating==null?null:Number(b.rating),total_pages:b.total_pages==null?null:Number(b.total_pages),takeaways:(b.takeaways||[]).filter(Boolean)}));
+    logs=lg.map(l=>({...l,pages:Number(l.pages)})); pagesReady=ready;
     render();
   }catch(err){ if(id!==loadId)return; const missing=/relation .* does not exist|schema cache/i.test(err.message||''); message('history-message',missing?'Run setup.sql in your Supabase SQL editor once, then reload.':(err.message||'Could not load your books.'),'error'); }
 }
 
 // ---- derived ----
 const finished=()=>books.filter(b=>b.status==='finished');
+const pagesRead=id=>logs.reduce((a,l)=>l.book_id===id?a+l.pages:a,0);
+const pagesOn=(id,day)=>logs.reduce((a,l)=>l.book_id===id&&l.read_on===day?a+l.pages:a,0);
+// x / total pages and a bar. Reading past the total (an appendix, a miscount) stops the bar at 100%.
+function progressHtml(b){
+  const read=pagesRead(b.id), total=b.total_pages, pct=Math.min(100,Math.round(read/total*100));
+  return `<div class="progress"><div class="progress-top"><span><b>${read}</b> / ${total} pages</span><span class="pct">${pct}%</span></div><div class="bar${read>=total?' done':''}" role="progressbar" aria-label="${esc(b.title)}: ${pct}% read" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div></div>`;
+}
 function render(){
   const y=today().slice(0,4), fin=finished(), thisYear=fin.filter(b=>(b.finished_on||'').startsWith(y));
   const reading=books.filter(b=>b.status==='reading'), want=books.filter(b=>b.status==='want');
@@ -84,7 +96,19 @@ function render(){
   $('tile-finished').textContent=books.length?String(fin.length):'—';
   $('tile-avg').textContent=rated.length?r1(avg):'—';
   $('tile-want').textContent=books.length?String(want.length):'—';
-  drawBars(); drawDist(); renderLibrary();
+  drawBars(); drawDist(); renderReadingNow(); renderLibrary();
+}
+
+// ---- reading now: each open book's progress, and a quick way to log today's pages ----
+function renderReadingNow(){
+  const el=$('reading-now'), reading=books.filter(b=>b.status==='reading'), t=today();
+  $('log-open').hidden=!user||!pagesReady; $('b-pages-field').hidden=!pagesReady;
+  message('pages-message',user&&books.length&&!pagesReady?'To log pages and see progress bars, run pages.sql in your Supabase SQL editor once, then reload.':'');
+  el.hidden=!user||!pagesReady||!reading.length; if(el.hidden){ el.innerHTML=''; return; }
+  el.innerHTML=reading.map(b=>{ const read=pagesRead(b.id), td=pagesOn(b.id,t), done=b.total_pages&&read>=b.total_pages;
+    const body=b.total_pages?progressHtml(b):`<p class="log-preview">${read} pages read. <button class="text-button" data-edit="${b.id}" type="button">Add total pages</button> to see your progress.</p>`;
+    const action=done?`<button class="quiet-button" data-finish="${b.id}" type="button">Mark finished ✓</button>`:`<button class="quiet-button" data-log="${b.id}" type="button">Log pages +</button>`;
+    return `<article class="now-card"><div><h3>${esc(b.title)}</h3>${b.author?`<p class="book-author">${esc(b.author)}</p>`:''}</div>${body}<div class="now-foot"><small>${td?`+${td} page${td===1?'':'s'} today`:'Nothing logged today'}</small>${action}</div></article>`; }).join('');
 }
 
 // ---- bars: finished per month, last twelve months ----
@@ -112,7 +136,7 @@ function renderLibrary(){
   if(!books.length){ $('library-list').innerHTML='<p class="row-empty">No books yet. Add one you finished recently, with the three things worth keeping from it.</p>'; return; }
   if(!list.length){ $('library-list').innerHTML='<p class="row-empty">Nothing matches.</p>'; return; }
   $('library-list').innerHTML=list.map(b=>{ const stars=b.rating?'★'.repeat(b.rating)+'<i>'+'★'.repeat(10-b.rating)+'</i>':'';
-    return `<article class="book"><div class="cover" aria-hidden="true">${esc(initials(b.title))}</div><div class="book-main"><h3 class="book-title">${esc(b.title)}</h3>${b.author?`<p class="book-author">${esc(b.author)}</p>`:''}<div class="book-meta"><span class="badge ${b.status}">${STATUS[b.status]}</span>${stars?`<span class="stars-small" aria-label="${b.rating} out of 10">${stars}</span><span>${b.rating}/10 · ${WORDS[b.rating]}</span>`:''}${b.finished_on?`<span>${esc(medDate(b.finished_on))}</span>`:''}</div>${b.takeaways.length?`<ol class="takeaways">${b.takeaways.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>`:''}</div><div class="ops"><button class="text-button" data-edit="${b.id}" type="button">Edit</button><button class="text-button" data-del="${b.id}" type="button">Delete</button></div></article>`; }).join('');
+    return `<article class="book"><div class="cover" aria-hidden="true">${esc(initials(b.title))}</div><div class="book-main"><h3 class="book-title">${esc(b.title)}</h3>${b.author?`<p class="book-author">${esc(b.author)}</p>`:''}<div class="book-meta"><span class="badge ${b.status}">${STATUS[b.status]}</span>${stars?`<span class="stars-small" aria-label="${b.rating} out of 10">${stars}</span><span>${b.rating}/10 · ${WORDS[b.rating]}</span>`:''}${b.finished_on?`<span>${esc(medDate(b.finished_on))}</span>`:''}</div>${pagesReady&&b.total_pages&&(b.status==='reading'||pagesRead(b.id))?progressHtml(b):''}${b.takeaways.length?`<ol class="takeaways">${b.takeaways.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>`:''}</div><div class="ops"><button class="text-button" data-edit="${b.id}" type="button">Edit</button><button class="text-button" data-del="${b.id}" type="button">Delete</button></div></article>`; }).join('');
 }
 $('search').addEventListener('input',()=>{ query=$('search').value; renderLibrary(); });
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ filter=b.dataset.filter; document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); renderLibrary(); });
@@ -126,7 +150,7 @@ async function exportCsv(name,header,rows){
   try{ const file=new File([blob],name,{type:'text/csv'}); if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:name}); return; } }catch(err){ if(err?.name==='AbortError') return; }
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
 }
-$('csv-books').onclick=()=>exportCsv('read-books.csv',['title','author','status','rating','finished_on','takeaway_1','takeaway_2','takeaway_3'],books.map(b=>[b.title,b.author,b.status,b.rating??'',b.finished_on||'',b.takeaways[0]||'',b.takeaways[1]||'',b.takeaways[2]||'']));
+$('csv-books').onclick=()=>exportCsv('read-books.csv',['title','author','status','rating','finished_on','total_pages','pages_read','takeaway_1','takeaway_2','takeaway_3'],books.map(b=>[b.title,b.author,b.status,b.rating??'',b.finished_on||'',b.total_pages??'',pagesRead(b.id),b.takeaways[0]||'',b.takeaways[1]||'',b.takeaways[2]||'']));
 // ---- add / edit ----
 $('b-stars').innerHTML=Array.from({length:10},(_,i)=>`<button type="button" class="star" data-star="${i+1}" role="radio" aria-checked="false" aria-label="${i+1} out of 10">★</button>`).join('');
 function paintStars(n,hover){ const lit=hover!=null?hover:n; $('b-stars').querySelectorAll('.star').forEach(b=>{ const v=+b.dataset.star; b.classList.toggle('on',v<=lit); b.setAttribute('aria-checked',String(v===n)); }); $('b-rating-word').innerHTML=n?`<b>${n}/10</b> · ${WORDS[n]}`:'Tap a star.'; }
@@ -135,19 +159,21 @@ $('b-stars').addEventListener('pointerover',e=>{ const b=e.target.closest('.star
 $('b-stars').addEventListener('pointerleave',()=>paintStars(rating));
 function syncStatus(){ const s=$('b-status').value; $('b-date-field').hidden=s!=='finished'; $('b-rating-field').hidden=s==='want'; }
 $('b-status').onchange=syncStatus;
-function openBook(b){
+function openBook(b,finish){
   if(!user){ $('connection-dialog').showModal(); return; }
   $('b-id').value=b?.id||''; $('book-title').textContent=b?'Edit book.':'Add book.'; $('b-save').textContent=b?'Save changes ↗':'Save book ↗';
   $('b-title').value=b?.title||''; $('b-author').value=b?.author||''; $('b-status').value=b?.status||'finished'; $('b-date').value=b?.finished_on||(b?'':today());
+  $('b-pages').value=b?.total_pages??''; if(finish){ $('b-status').value='finished'; $('b-date').value=today(); }
   rating=b?.rating||0; paintStars(rating); const t=b?.takeaways||[]; $('b-t1').value=t[0]||''; $('b-t2').value=t[1]||''; $('b-t3').value=t[2]||'';
   syncStatus(); message('book-message',''); $('book-dialog').showModal(); $('b-title').focus();
 }
 $('add-open').onclick=()=>openBook(); $('book-close').onclick=()=>{ if(!busy)$('book-dialog').close(); };
-for(const id of ['book-dialog','connection-dialog']) $(id).addEventListener('cancel',e=>{ if(busy)e.preventDefault(); });
+for(const id of ['book-dialog','log-dialog','connection-dialog']) $(id).addEventListener('cancel',e=>{ if(busy)e.preventDefault(); });
 $('book-form').addEventListener('submit',async e=>{
   e.preventDefault(); if(busy||!user)return; busy=true; $('b-save').disabled=true;
   try{
     const status=$('b-status').value; const row={title:$('b-title').value.trim(),author:$('b-author').value.trim(),status,rating:status==='want'?null:(rating||null),finished_on:status==='finished'?($('b-date').value||today()):null,takeaways:[$('b-t1').value,$('b-t2').value,$('b-t3').value].map(s=>s.trim()).filter(Boolean),updated_at:new Date().toISOString()};
+    if(pagesReady){ const v=$('b-pages').value.trim(), n=Number(v); if(v&&(!Number.isInteger(n)||n<1||n>20000)) throw new Error('Total pages should be a whole number from 1 to 20000.'); row.total_pages=v?n:null; }
     if(!row.title) throw new Error('Give it a title.'); if(status==='finished'&&!row.rating) throw new Error('Rate it, even roughly. One star is fine.');
     const db=await connect(); const id=$('b-id').value; const q=id?db.from('books').update(row).eq('id',id):db.from('books').insert(row); const {error}=await q; if(error)throw error;
     $('book-dialog').close(); await load();
@@ -155,10 +181,44 @@ $('book-form').addEventListener('submit',async e=>{
   finally{ busy=false; $('b-save').disabled=false; }
 });
 document.addEventListener('click',async e=>{
-  const b=e.target.closest('button[data-edit],button[data-del]'); if(!b||busy)return;
+  const b=e.target.closest('button[data-edit],button[data-del],button[data-log],button[data-finish],button[data-log-del]'); if(!b||busy)return;
   if(b.dataset.edit) return openBook(books.find(x=>x.id===b.dataset.edit));
+  if(b.dataset.finish) return openBook(books.find(x=>x.id===b.dataset.finish),true);
+  if(b.dataset.log) return openLog(b.dataset.log);
+  if(b.dataset.logDel){ if(!confirm('Delete this entry?'))return; busy=true; try{ const db=await connect(); const {error}=await db.from('reading_log').delete().eq('id',b.dataset.logDel); if(error)throw error; await load(); paintLog(); } catch(err){ message('log-message',err.message||'Could not delete.','error'); } finally{ busy=false; } return; }
   const book=books.find(x=>x.id===b.dataset.del); if(!book||!confirm(`Delete "${book.title}" and its notes?`))return;
   busy=true; try{ const db=await connect(); const {error}=await db.from('books').delete().eq('id',book.id); if(error)throw error; await load(); } catch(err){ message('history-message',err.message||'Could not delete.','error'); } finally{ busy=false; }
+});
+
+// ---- log pages ----
+function openLog(id){
+  if(!user){ $('connection-dialog').showModal(); return; }
+  const reading=books.filter(b=>b.status==='reading'), pick=books.find(b=>b.id===id)||reading[0];
+  if(!pick){ message('pages-message','Set a book to "Reading now" first, then log its pages.','error'); return; }
+  const opts=reading.includes(pick)?reading:[pick,...reading];
+  $('l-book').innerHTML=opts.map(b=>`<option value="${b.id}">${esc(b.title)}</option>`).join(''); $('l-book').value=pick.id;
+  $('l-pages').value=''; $('l-date').value=today(); $('l-date').max=today(); message('log-message','');
+  paintLog(); $('log-dialog').showModal(); $('l-pages').focus();
+}
+// Live preview of where today's pages take the book, and the last few entries to fix a mistake.
+function paintLog(){
+  const b=books.find(x=>x.id===$('l-book').value); if(!b)return;
+  const add=Math.max(0,Math.round(Number($('l-pages').value)||0)), read=pagesRead(b.id);
+  $('l-preview').innerHTML=b.total_pages?`<b>${read}${add?` → ${read+add}`:''}</b> of ${b.total_pages} pages · ${Math.min(100,Math.round((read+add)/b.total_pages*100))}%`:`${read+add} pages read. Add the book's total pages to see a percentage.`;
+  const recent=logs.filter(l=>l.book_id===b.id).slice(0,5); $('l-recent').hidden=!recent.length;
+  $('l-recent').innerHTML=recent.length?'<p>Recent</p>'+recent.map(l=>`<div class="log-row"><span>${esc(medDate(l.read_on))} · ${l.pages} page${l.pages===1?'':'s'}</span><button class="text-button" data-log-del="${l.id}" type="button">Delete</button></div>`).join(''):'';
+}
+$('l-book').onchange=paintLog; $('l-pages').addEventListener('input',paintLog);
+$('log-open').onclick=()=>openLog(); $('log-close').onclick=()=>{ if(!busy)$('log-dialog').close(); };
+$('log-form').addEventListener('submit',async e=>{
+  e.preventDefault(); if(busy||!user)return; busy=true; $('l-save').disabled=true;
+  try{
+    const pages=Number($('l-pages').value); if(!Number.isInteger(pages)||pages<1||pages>5000) throw new Error('Enter the pages you read as a whole number, 1 to 5000.');
+    const row={book_id:$('l-book').value,read_on:$('l-date').value||today(),pages}; if(row.read_on>today()) throw new Error('Pick today or an earlier day.');
+    const db=await connect(); const {error}=await db.from('reading_log').insert(row); if(error)throw error;
+    $('log-dialog').close(); await load();
+  }catch(err){ message('log-message',err.message||'Could not save.','error'); }
+  finally{ busy=false; $('l-save').disabled=false; }
 });
 
 // What the coach reads: every book with its status, rating, dates and takeaways, plus pace.
@@ -166,7 +226,8 @@ function coachSummary(){
   const y=today().slice(0,4); const fin=finished(); const L=[];
   L.push(`Library: ${books.length} books. Finished ${fin.length} all time, ${fin.filter(b=>(b.finished_on||'').startsWith(y)).length} in ${y}. Reading now: ${books.filter(b=>b.status==='reading').length}. Want to read: ${books.filter(b=>b.status==='want').length}.`);
   const byMonth={}; for(const b of fin) if(b.finished_on){ const k=b.finished_on.slice(0,7); byMonth[k]=(byMonth[k]||0)+1; } L.push('Finished per month: '+Object.entries(byMonth).sort().slice(-12).map(([k,v])=>`${k} ${v}`).join(', ')+'.');
-  for(const b of books.slice().sort((a,c)=>(c.finished_on||c.updated_at)<(a.finished_on||a.updated_at)?-1:1).slice(0,40)) L.push(`\n${b.title}${b.author?' by '+b.author:''} — ${STATUS[b.status]}${b.rating?`, rated ${b.rating}/10`:''}${b.finished_on?`, finished ${b.finished_on}`:''}${b.takeaways.length?'\n  takeaways: '+b.takeaways.map((t,i)=>`(${i+1}) ${t}`).join(' '):'\n  (no takeaways recorded)'}`);
+  if(pagesReady){ const since=isoDay(Date.now()-13*86400000), recent=logs.filter(l=>l.read_on>=since); L.push(`Pages logged in the last 14 days: ${recent.reduce((a,l)=>a+l.pages,0)} across ${new Set(recent.map(l=>l.read_on)).size} days.`); }
+  for(const b of books.slice().sort((a,c)=>(c.finished_on||c.updated_at)<(a.finished_on||a.updated_at)?-1:1).slice(0,40)) L.push(`\n${b.title}${b.author?' by '+b.author:''} — ${STATUS[b.status]}${b.total_pages?`, ${pagesRead(b.id)}/${b.total_pages} pages read`:''}${b.rating?`, rated ${b.rating}/10`:''}${b.finished_on?`, finished ${b.finished_on}`:''}${b.takeaways.length?'\n  takeaways: '+b.takeaways.map((t,i)=>`(${i+1}) ${t}`).join(' '):'\n  (no takeaways recorded)'}`);
   return L.join('\n');
 }
 window.coach={app:'read',note:'The coach reads your titles, ratings and takeaways.',userId:async()=>user?.id||null,session:async()=>{ try{ const db=await connect(); const {data:{session}}=await db.auth.getSession(); return session?.access_token||null; }catch{ return null; } },summary:coachSummary};

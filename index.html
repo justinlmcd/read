@@ -126,6 +126,16 @@ textarea{width:100%;min-height:180px;resize:vertical;border-radius:8px;backgroun
 .stars-pick{display:flex;gap:3px;flex-wrap:wrap}.stars-pick .star{font-size:26px;padding:3px 1px}
 .note-field{display:grid;gap:10px}.note-field input{padding:11px 12px}
 @media(max-width:520px){.book{grid-template-columns:36px 1fr;gap:12px}.cover{width:36px;height:50px;font-size:13px}.book .ops{grid-column:2;justify-content:flex-start;margin-top:4px}.stars-pick .star{font-size:22px;padding:2px 1px}}
+.reading-now{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin:0 0 28px}
+.now-card{border:1px solid var(--line);border-radius:10px;padding:16px 18px;background:linear-gradient(110deg,#ffb86b10,transparent 70%),#150f0a;display:grid;gap:12px;min-width:0}
+.now-card h3{font-size:16px;font-weight:550;letter-spacing:-.02em;margin:0;overflow-wrap:anywhere}.now-card .book-author{margin:1px 0 0}
+.now-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.now-foot small{font-size:12px;color:var(--muted)}.now-foot .quiet-button{padding:7px 12px}
+.progress{display:grid;gap:7px;min-width:0}.progress-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--muted)}.progress-top b{color:var(--ink);font-weight:550;font-size:15px}.progress-top .pct{font:12px var(--mono);color:var(--mint)}
+.bar{height:8px;border-radius:99px;background:#2c2017;overflow:hidden}.bar i{display:block;height:100%;border-radius:inherit;background:var(--mint);transition:width .3s}.bar.done i{background:var(--good)}
+.book .progress{margin-top:12px;max-width:420px}
+.log-preview{font-size:13px;color:var(--muted);margin:0;min-height:20px}.log-preview b{color:var(--ink);font-weight:550}
+.log-recent{margin-top:18px;border-top:1px solid #2c2017}.log-recent p{margin:12px 0 4px;font:11px var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}.log-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;font-size:13px}.log-row button{font-size:12px;padding:0}.log-row button:hover{color:var(--error)}
+@media(max-width:520px){header .overview-label{display:none}.header-right .quiet-button{white-space:nowrap;padding:8px 11px}}
 .brand-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.home{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;color:var(--muted);text-decoration:none;flex:none}.home:hover{color:var(--mint);border-color:var(--mint)}.home svg{width:16px;height:16px}@media(max-width:760px){.brand-row{gap:12px}.home{width:32px;height:32px}}
 </style>
 </head>
@@ -137,7 +147,7 @@ textarea{width:100%;min-height:180px;resize:vertical;border-radius:8px;backgroun
 <a class="area-link" href="#library"><span class="area-name"><svg viewBox="0 0 20 26" fill="none" aria-hidden="true"><path d="M10 3l2.2 4.6 5 .7-3.6 3.5.9 5L10 14.4l-4.5 2.4.9-5L2.8 8.3l5-.7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Reading now</span><strong id="side-reading">—</strong></a>
 </nav></aside>
 <div class="wrap">
-<header><span class="overview-label">Your overview</span><div class="header-right"><span class="status" id="connection-status">Your record</span><button class="quiet-button" id="connect-open" type="button">Sign in ↗</button><button class="quiet-button" id="add-open" type="button" hidden>Add book +</button><button class="text-button" id="sign-out" type="button" hidden>Sign out</button></div></header>
+<header><span class="overview-label">Your overview</span><div class="header-right"><span class="status" id="connection-status">Your record</span><button class="quiet-button" id="connect-open" type="button">Sign in ↗</button><button class="quiet-button" id="log-open" type="button" hidden>Log pages +</button><button class="quiet-button" id="add-open" type="button" hidden>Add book +</button><button class="text-button" id="sign-out" type="button" hidden>Sign out</button></div></header>
 <main>
 <aside class="quote" id="quote" aria-label="Quote of the day"><span class="quote-mark" aria-hidden="true">“</span><div class="quote-body"><p class="quote-label">Quote of the day</p><p class="quote-text" id="quote-text"></p><p class="quote-author" id="quote-author"></p></div></aside>
 <section class="hero" id="read" aria-label="Reading overview">
@@ -148,6 +158,7 @@ textarea{width:100%;min-height:180px;resize:vertical;border-radius:8px;backgroun
 <div class="tile"><p>Average rating</p><strong id="tile-avg">—</strong><small>of finished books</small></div>
 <div class="tile"><p>Want to read</p><strong id="tile-want">—</strong><small id="tile-want-note">on the list</small></div>
 </div>
+<div class="reading-now" id="reading-now" aria-label="Reading now" hidden></div><p class="message" id="pages-message" role="status"></p>
 <section class="coach" id="coach" aria-label="Your coach"><div class="coach-top"><h2><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 16l.9 2.1L8 19l-2.1.9L5 22l-.9-2.1L2 19l2.1-.9zM19 14l.7 1.6 1.6.7-1.6.7L19 18.6l-.7-1.6-1.6-.7 1.6-.7z" fill="currentColor"/></svg>Your coach</h2><button class="quiet-button" id="coach-refresh" type="button" hidden>Ask the coach ↗</button></div><div id="coach-body"></div><p class="message" id="coach-message" role="status" aria-live="polite"></p></section>
 <div class="charts">
 <div class="chart-card" id="bars-card"><h2>Books finished per month</h2><p class="sub" id="bars-sub">Last twelve months</p><div class="bars" id="bars"></div><div class="chart-empty" id="bars-empty" hidden>Finish a book to start the chart.</div></div>
@@ -163,9 +174,15 @@ textarea{width:100%;min-height:180px;resize:vertical;border-radius:8px;backgroun
 <label class="field"><span>Title</span><input id="b-title" type="text" placeholder="The title" maxlength="200" required autocomplete="off"></label>
 <label class="field"><span>Author</span><input id="b-author" type="text" placeholder="Who wrote it" maxlength="120" autocomplete="off"></label>
 <div class="two"><label class="field"><span>Status</span><select id="b-status"><option value="finished">Finished</option><option value="reading">Reading now</option><option value="want">Want to read</option></select></label><label class="field" id="b-date-field"><span>Finished on</span><input id="b-date" type="date"></label></div>
+<label class="field" id="b-pages-field"><span>Total pages</span><input id="b-pages" type="number" inputmode="numeric" min="1" max="20000" step="1" placeholder="e.g. 347, for the progress bar" autocomplete="off"></label>
 <div class="field" id="b-rating-field"><span>Rating</span><div class="stars stars-pick" id="b-stars" role="radiogroup" aria-label="Rate the book from 1 to 10"></div><p class="rating-word" id="b-rating-word" style="margin:4px 0 0">Tap a star.</p></div>
 <div class="field note-field"><span>Top three takeaways, notes or quotes</span><input id="b-t1" type="text" placeholder="1." maxlength="400" autocomplete="off"><input id="b-t2" type="text" placeholder="2." maxlength="400" autocomplete="off"><input id="b-t3" type="text" placeholder="3." maxlength="400" autocomplete="off"></div>
 <input type="hidden" id="b-id"><button class="primary" id="b-save" type="submit">Save book ↗</button></fieldset><p class="message" id="book-message" role="status"></p></form></dialog>
+<dialog id="log-dialog" aria-labelledby="log-title"><div class="modal-head"><h2 id="log-title">Log pages.</h2><button class="close" id="log-close" type="button" aria-label="Close">×</button></div><form id="log-form"><fieldset id="log-fields" disabled>
+<label class="field"><span>Book</span><select id="l-book"></select></label>
+<div class="two"><label class="field"><span>Pages read</span><input class="big" id="l-pages" type="number" inputmode="numeric" min="1" max="5000" step="1" placeholder="0" required autocomplete="off"></label><label class="field"><span>Day</span><input id="l-date" type="date" required></label></div>
+<p class="log-preview" id="l-preview" aria-live="polite"></p>
+<button class="primary" id="l-save" type="submit">Log pages ↗</button></fieldset><p class="message" id="log-message" role="status"></p><div class="log-recent" id="l-recent" hidden></div></form></dialog>
 <dialog id="connection-dialog" aria-labelledby="connect-title"><div class="modal-head"><h2 id="connect-title">Sign in.</h2><button class="close" id="connect-close" type="button" aria-label="Close sign-in">×</button></div><p class="modal-copy">Your books, in your database.</p>
 <form id="connect-form"><label class="field"><span>Email</span><input id="email" type="email" autocomplete="username" required></label><label class="field" style="margin-top:16px"><span>Password</span><input id="password" type="password" autocomplete="current-password" required></label><button class="primary" id="connect-submit" type="submit" style="margin-top:16px">Sign in ↗</button><p class="message" id="connect-message" role="status"></p></form></dialog>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
