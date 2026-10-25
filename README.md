@@ -4,6 +4,7 @@ A book log. Title, author, a rating out of ten, whether you are reading it, fini
 
 ## What's on the page
 
+- **Reading now**: each book you're reading, with pages read out of its total (like **123 / 347 pages**), a completion bar, and how many pages you logged today. Press **Log pages +** to add today's reading.
 - **Finished this year**, books you are reading now, finished all time, your average rating, and the want-to-read list.
 - **Your coach**: press the button and Claude reads your titles, ratings and takeaways and tells you how your reading is going and what to pick up next. Nothing is sent until you press it. Needs `ANTHROPIC_API_KEY` in Vercel (and `ANTHROPIC_WORKSPACE_ID` if your key is organization-level).
 - **Books finished per month** for the last year, and a spread of your ratings.
@@ -23,6 +24,12 @@ A book log. Title, author, a rating out of ten, whether you are reading it, fini
 
 Vercel redeploys on every push to `main`.
 
+## Pages and progress
+
+Give a book its **Total pages** when you add or edit it, then press **Log pages +** each day and enter how many pages you read. The book's bar fills as you go, the log form previews where today's pages take you, and you can delete a wrong entry from the same form. When you reach the last page, the card offers **Mark finished ✓**.
+
+If you set READ up before pages existed, run [pages.sql](pages.sql) once in the Supabase SQL editor. It adds the page count to your books and a `reading_log` table; your existing books stay as they are. Until then the page tells you to run it and everything else keeps working.
+
 ## Run locally
 
 ```
@@ -38,7 +45,8 @@ Then open http://localhost:8802. The coach only runs on Vercel.
 - `coach.js` and `api/coach.mjs` — the coach card and the Vercel function behind it
 - `quote-of-day.js` — a quote that changes at local midnight
 - `api/config.js` — hands the two public Supabase settings to the page
-- `setup.sql` — the `books` table, locked to each user by row-level security
+- `setup.sql` — the `books` and `reading_log` tables, locked to each user by row-level security
+- `pages.sql` — adds page tracking to a READ set up before it existed
 
 ## Add to your iPhone home screen
 
